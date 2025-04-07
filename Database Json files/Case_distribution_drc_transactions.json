@@ -1,0 +1,73 @@
+{
+  "Case_Distribution_Batch_ID":"005",
+  "batch_seq_details": [
+    {
+      "batch_seq": 1,
+      "created_dtm": {
+        "$date": "2025-02-17T09:27:28.544Z"
+      },
+      "created_by": "Sys",
+      "action_type": "distribution",
+      "CRD_Distribution_Status" : "open",
+      "CRD_Distribution_Status_on" : null,
+      "array_of_distributions": [
+        {
+          "drc": "D1",
+          "rulebase_count": 17
+        },
+        {
+          "drc": "D2",
+          "rulebase_count": 14
+        },
+        {
+          "drc": "D3",
+          "rulebase_count": 12
+        }
+      ],
+      "batch_seq_rulebase_count": 100
+    },
+    {
+      "batch_seq": 2,
+      "created_dtm": {
+        "$date": "2025-02-17T09:27:28.544Z"
+      },
+      "created_by": "sys",
+      "action_type": "amend",
+      "CRD_Distribution_Status" : "open",
+      "CRD_Distribution_Status_on" : null,
+      "array_of_distributions": [
+        {
+          "rtom": "CW",
+          "donor_drc_id": "D2",
+          "receiver_drc_id": "D1",
+          "transfer_count": 2
+
+        }
+      ],
+      "batch_seq_rulebase_count": "5"
+    }
+  ],
+  "created_dtm": {
+    "$date": "2025-02-17T09:27:28.544Z"
+  },
+  "created_by": "Sys",
+  "current_arrears_band": "AB-5_10",
+  "rulebase_count": 100,
+  "rulebase_arrears_sum": 5000,
+  "drc_commision_rule": "PEO TV",
+  "forward_for_approvals_on": {
+    "$date": "1970-01-01T00:00:00.000Z"
+  },
+  "approved_by": null,
+  "approved_on": null,
+  "proceed_on": null,
+  "tmp_record_remove_on": null,
+  "createdAt": {
+    "$date": "2025-02-17T09:27:28.549Z"
+  },
+  "status_changed_on": {
+    "$date": "2025-02-18T05:27:09.624Z"
+  },
+  "summery_status": "open",
+  "__v": 1
+}
