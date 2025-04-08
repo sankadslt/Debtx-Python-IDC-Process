@@ -1,0 +1,69 @@
+BEGIN -FUNCTION Batch_Approved_Case_Distribution_To_DRC()
+    INITIALIZE db as None
+    INITIALIZE total_error_count as 0
+
+    TRY:
+        TRY:
+            db = get_db_connection()
+        CATCH Exception AS db_error:
+            RAISE DatabaseError("Database connection failed")
+
+        FETCH system_tasks FROM db.System_tasks WHERE Template_Task_Id = 29 AND task_status = "Open"
+        CONVERT system_tasks TO task_list
+
+        FOR EACH task IN task_list:
+            TRY:
+                GET batch_id FROM task.parameters.case_distribution_batch_id
+                IF batch_id IS NULL:
+                    RAISE ValidationError("Missing case_distribution_batch_id in task parameters")
+
+                UPDATE db.System_tasks SET task_status = "InProgress" WHERE _id = task._id
+
+                FETCH approver FROM db.Temp_forwarded_approver WHERE approver_reference = batch_id
+                IF approver IS NULL:
+                    RAISE NotFoundError("Approver not found for batch_id: batch_id")
+
+                IF approver.approver_type != "DRC_Distribution":
+                    CONTINUE TO NEXT TASK
+
+                FETCH case_distribution_drc_details FROM db.Temp_case_distribution_drc_details WHERE case_distribution_batch_id = batch_id
+                IF case_distribution_drc_details IS EMPTY:
+                    RAISE DataFetchError("No case distribution details found for batch_id: batch_id")
+
+                INITIALIZE batch_error_count AS 0
+
+                FOR EACH case_drc_details IN case_distribution_drc_details:
+                    TRY:
+                        GET case_id FROM case_drc_details
+                        IF case_drc_details.proceed_on IS NOT NULL:
+                            CONTINUE TO NEXT CASE
+
+                        IF case_id IS NULL:
+                            RAISE CaseIdNotFoundError("Missing case_id in case distribution details")
+
+                        CALL API (Case_Distribution_To_DRC/case_id)
+                        PARSE API RESPONSE
+
+                    CATCH API RequestException AS api_error:
+                        INCREMENT batch_error_count
+                        RAISE ProcessingError("API call failed for case_id: case_id")
+
+                UPDATE db.System_tasks SET task_status = "Complete", task_description = "Task completed with batch_error_count errors" WHERE _id = task._id
+                INCREMENT total_error_count BY batch_error_count
+
+            CATCH CustomException AS task_error:
+                CONTINUE TO NEXT TASK
+            CATCH Exception AS task_error:
+                SET task_status = "Failed"
+                CONTINUE TO NEXT TASK
+
+        IF total_error_count > 0:
+            HANDLE TOTAL ERROR REPORTING
+
+    CATCH CustomException AS e:
+        HANDLE CUSTOM EXCEPTION
+    CATCH Exception AS e:
+        HANDLE UNEXPECTED EXCEPTION
+    FINALLY:
+        IF db IS NOT NULL:
+            CLOSE DATABASE CONNECTION
