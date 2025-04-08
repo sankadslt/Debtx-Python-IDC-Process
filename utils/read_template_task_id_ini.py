@@ -15,38 +15,66 @@ read_template_task_id_ini.py file is as follows:
 import configparser
 from utils.loggers import get_logger
 from utils.Custom_Exceptions import INIFileReadError
-from utils.filePath import get_filePath
+from utils.get_root_paths import get_config_filePath
 
-logger = get_logger("amend_status_logger")
 
-def read_template_task_id_ini():
+logger = get_logger("tmp_ini_reader")
+
+
+def get_ini_value(section: str, key: str, default_value: str = None) -> str:
     """
-    Reads the TEMPLATE_TASK_ID from the INI file.
-    Returns: (success, template_task_id or error)
+    Generic function to read a value from an INI file.
+    Args:
+        section (str): The section in the INI file.
+        key (str): The key within the section.
+        default_value (str, optional): Default value to return if key not found.
+    Returns:
+        str: The value corresponding to the section and key, or default_value.
+    Raises:
+        INIFileReadError: If file reading fails and no default provided.
     """
-    file_path = get_filePath("Config_drs")
+    file_path = None
     try:
         config = configparser.ConfigParser()
+        file_path = get_config_filePath()
         config.read(file_path)
-        
-        if "TEMPLATE_TASK" in config and "TEMPLATE_TASK_ID" in config["TEMPLATE_TASK"]:
-            template_task_id = config["TEMPLATE_TASK"]["TEMPLATE_TASK_ID"]
-            logger.info(f"Read TEMPLATE_TASK_ID: {template_task_id} from {file_path}")
-            return True, int(template_task_id)
-        else:
-            error_message = f"TEMPLATE_TASK_ID not found in {file_path}"
-            logger.error(error_message)
-            return False, error_message
-    except Exception as ini_read_error:
-        logger.error(f"Failed to read INI file {file_path}: {ini_read_error}")
-        raise INIFileReadError(f"Failed to read INI file {file_path}: {ini_read_error}")
 
-def get_template_task_id():
+        if section in config and key in config[section]:
+            value = config[section][key]
+            logger.info(f"Read {key} from section [{section}] in {file_path}: {value}")
+            return value
+        elif default_value is not None:
+            logger.warning(f"Using default value for {key} in co [{section}]")
+            return default_value
+        else:
+            error_message = f"{key} not found in section [{section}] of {file_path}"
+            logger.error(error_message)
+            raise INIFileReadError(error_message)
+    except FileNotFoundError as fnf_error:
+        if default_value is not None:
+            logger.warning(f"Config file not found, using default value: {fnf_error}")
+            return default_value
+        logger.error(f"Config file not found: {fnf_error}")
+        raise INIFileReadError(f"Config file not found: {fnf_error}")
+    except Exception as error:
+        logger.error(f"Failed to read INI file {file_path or 'Unknown'}: {error}")
+        raise INIFileReadError(f"Failed to read INI file {file_path or 'Unknown'}: {error}")
+    
+def get_template_task_id(default_value: int = None) -> int:
     """
-    Gets the TEMPLATE_TASK_ID from the INI file and handles errors.
-    Returns: (success, template_task_id or error)
+    Gets the Template_Task_Id from the INI file.
+    Args:
+        default_value (int, optional): Default value to return if not found.
+    Returns:
+        int: The Template_Task_Id value.
+    Raises:
+        INIFileReadError: If the value is not found or not an integer and no default provided.
     """
-    success_read_ini, template_task_id = read_template_task_id_ini()
-    if not success_read_ini:
-        raise INIFileReadError(template_task_id)
-    return template_task_id
+    try:
+        value = get_ini_value("TEMPLATE_TASK", "Template_Task_Id", str(default_value) if default_value is not None else None)
+        return int(value)
+    except ValueError:
+        if default_value is not None:
+            logger.warning(f"Template_Task_Id must be an integer. Using default value: {default_value}")
+            return default_value
+        raise INIFileReadError(f"Template_Task_Id must be an integer. Got: {value}")

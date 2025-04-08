@@ -1,24 +1,20 @@
 import logging
-import logging.config
-import os
-from utils.filePath import get_filePath
-# Load logger configuration from loggers.ini
-config_file = get_filePath("loggers")
+from logging import config
 
-logging.debug(f"Logger configuration file resolved to: {config_file}")  # Debug log for resolved path
-if not os.path.isfile(config_file):
-    raise FileNotFoundError(f"Logger configuration file not found: {config_file}")
+from utils.get_root_paths import get_logger_filePath
 
-logging.config.fileConfig(config_file)
 
-def get_logger(name: str) -> logging.Logger:
-    """
-    Retrieves a logger with the specified name.
-    
-    Args:
-        name (str): The name of the logger.
-    
-    Returns:
-        logging.Logger: The configured logger.
-    """
-    return logging.getLogger(name)
+def setup_logging():
+    config_file = get_logger_filePath()  # Get the path to the logger config file
+
+    try:
+        config.fileConfig(config_file)
+    except Exception as e:
+        print(f"Error setting up logging: {e}")
+
+def get_logger(logger_name):
+    """Retrieve a logger by name."""
+    return logging.getLogger(logger_name)
+
+# Setup logging on module import
+setup_logging()
