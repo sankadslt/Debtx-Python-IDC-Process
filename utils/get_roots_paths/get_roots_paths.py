@@ -15,6 +15,7 @@ def get_config_filePath():
     :return: Full path to the specified file in the Config directory.
     """
     project_root = get_project_root()
+    print(f"Project root: {project_root}")
     config_file_path = project_root / "Config" /"drs_core_config.ini"
     return config_file_path
 
