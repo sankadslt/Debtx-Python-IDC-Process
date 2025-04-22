@@ -29,12 +29,11 @@
 from utils.custom_Exceptions.cust_exceptions import *
 from logging import getLogger
 from pymongo import MongoClient
-from utils.database.connectDB import get_db_connection
+from utils.coreUtils import config_values 
 import requests
 import json
 import traceback
-from utils.api.connectAPI import read_api_config
-from utils.task_template.connect_task_template import get_template_task_id
+
 
 
 logger = getLogger()
@@ -44,19 +43,17 @@ def Batch_Approved_Case_Distribution_To_DRC():
     Process system tasks for approved case distribution to DRC.
     """
     logger.info("Starting Batch_Approved_Case_Distribution_To_DRC process")
-    db = None  # Initialize db variable outside try block
+    db_client = None  # Initialize database variable outside try block
     total_error_count = 0  # Initialize the total error count
 
     try:
-        try:
-            db = get_db_connection()
-        except Exception as db_error:
-            logger.error(f"Database connection failed: {str(db_error)}")
-            raise DatabaseError("Database connection failed")
+        db_client = MongoClient(config_values["mongo_uri"])
+        database = db_client[config_values["database_name"]]
+        logger.info("Connected to MongoDB database successfully")
         
         
-        template_task_id = get_template_task_id()       
-        system_tasks = db.System_tasks.find({"Template_Task_Id":template_task_id, "task_status": "Open"})
+        template_task_id = config_values["template_task_id"]       
+        system_tasks = database.System_tasks.find({"Template_Task_Id":template_task_id, "task_status": "Open"})
         task_list = list(system_tasks)  # Convert cursor to a list
         logger.info(f"Found {len(task_list)} tasks to process.")
 
@@ -67,10 +64,10 @@ def Batch_Approved_Case_Distribution_To_DRC():
                     raise ValidationError("Missing case_distribution_batch_id in task parameters")
 
                 logger.info(f"Processing task {task['_id']} with batch_id {batch_id}")
-                db.System_tasks.update_one({"_id": task["_id"]}, {"$set": {"task_status": "InProgress"}})
+                database.System_tasks.update_one({"_id": task["_id"]}, {"$set": {"task_status": "InProgress"}})
                 
                 #fetching the corresponding approver from Template_forwarded_approver collection
-                approver = db.tmp_forwarded_approver.find_one({"approver_reference": batch_id})
+                approver = database.tmp_forwarded_approver.find_one({"approver_reference": batch_id})
                 if not approver:
                     raise NotFoundError(f"Approver not found for batch_id: {batch_id}")
                 
@@ -82,7 +79,7 @@ def Batch_Approved_Case_Distribution_To_DRC():
                 logger.info(f"Approver type DRC_Distribution found for batch_id {batch_id}")
                
                 #fetching the case distribution details from Template_case_distribution_drc_details collection using case_distribution_batch_id
-                case_distribution_drc_details = list(db.Tmp_Case_Distribution_DRC_Details.find({"case_distribution_batch_id": batch_id}))
+                case_distribution_drc_details = list(database.Tmp_Case_Distribution_DRC_Details.find({"case_distribution_batch_id": batch_id}))
                 if not case_distribution_drc_details:
                     raise DataFetchError(f"No case distribution details found for batch_id: {batch_id}")
 
@@ -99,7 +96,7 @@ def Batch_Approved_Case_Distribution_To_DRC():
                             continue
                         
                         # Construct the API URL using the case_id 
-                        api_url = read_api_config()+ str(case_id)
+                        api_url = config_values["case_distribution_to_drc_endpoint"]+ str(case_id)
                         
                         if not case_id:
                             raise CaseIdNotFoundError("Missing case_id in case distribution details")
@@ -123,7 +120,7 @@ def Batch_Approved_Case_Distribution_To_DRC():
                         continue
                 
                 #set task status to complete and update task description with error count
-                db.System_tasks.update_one({"_id": task["_id"]}, {"$set": {
+                database.System_tasks.update_one({"_id": task["_id"]}, {"$set": {
                     "task_status": "Complete",
                     "task_description": f"Task completed with {batch_error_count} errors"
                 }})
@@ -137,7 +134,7 @@ def Batch_Approved_Case_Distribution_To_DRC():
             except CustomException as task_error:
                 logger.error(f"Custom exception processing task {task['_id']}: {str(task_error)}")
             except Exception as task_error:
-                db.System_tasks.update_one({"_id":task["_id"]},{"$set":{"task_status":"Failed"}})
+                database.System_tasks.update_one({"_id":task["_id"]},{"$set":{"task_status":"Failed"}})
                 logger.error(f"Unexpected error processing task {task['_id']}: {str(task_error)}\n{traceback.format_exc()}")
 
         if total_error_count > 0:
@@ -148,6 +145,6 @@ def Batch_Approved_Case_Distribution_To_DRC():
     except Exception as e:
         logger.error(f"Unexpected error: {str(e)}\n{traceback.format_exc()}")
     finally:
-        if db is not None:
-            db.client.close()
+        if database is not None:
+            database.client.close()
             logger.info("Database connection closed.")

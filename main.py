@@ -29,12 +29,15 @@
 from actionManipulation.batch_approved_case_distribution_to_drc.Batch_Approved_Case_Process import Batch_Approved_Case_Distribution_To_DRC
 from utils.custom_Exceptions.cust_exceptions import FileMissingError
 from utils.logger.loggers import get_logger
+from utils.coreUtils import load_config
 
 logger = get_logger("ActionControllerLogger")
 
 def main():
     try:
-
+        config_values = load_config()
+        print("Configuration values hash map: ", config_values)
+        logger.info("Configuration loaded successfully")
         logger.info("Starting Batch Approved Case Distribution To DRC process...")
 
         Batch_Approved_Case_Distribution_To_DRC()
