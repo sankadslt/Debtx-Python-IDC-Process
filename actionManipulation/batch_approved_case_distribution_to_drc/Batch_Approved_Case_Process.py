@@ -46,7 +46,7 @@ def Batch_Approved_Case_Distribution_To_DRC():
     """
     logger.info("Starting Batch_Approved_Case_Distribution_To_DRC process")
     
-    db_client = None  # Initialize database variable outside try block
+ 
     
     total_error_count = 0  # Initialize the total error count
 

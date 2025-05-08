@@ -1,0 +1,20 @@
+General Purpose - This Program is responsible for Calling \Case_Distribution_To_DRC For Batch Cases that successfully validated.
+
+
+'''Program Flow'''
+
+This process starts with finding the system task with Temoplate_Task_Id 29 and task_status Open.,
+then it will get the case distribution batch id from parameters and find the corresponding approver from -
+Template_forwarded_approver collection.
+then it will check the approver type is DRC_Distribution and get the case distribution details from-
+Template_case_distribution_drc_details collection using ,
+case_distribution_batch_id.then for all the cases listed with that batch id program checks the proceed_on field is None or not.
+if it is null, it will call the API \Case_Distribution_To_DRC with case_id as parameter.
+onse the API is called, it will update the task status to Complete and task description with the number of errors occurred.
+
+
+
+    Collections:
+    -System_tasks:                             -Read
+    -tmp_forwarded_approver :                  -Read
+    -Temp_Case_Distribution_DRC_Details:       -Read
