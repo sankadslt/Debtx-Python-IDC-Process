@@ -33,6 +33,7 @@
 from pymongo import MongoClient
 from utils.logger.loggers import get_logger
 from utils.customExceptions.customExceptions import TaskProcessingError
+from processManipulation.fileOperations.fileOperations import process_and_validate_file
 from utils.coreConfig import config
 from utils.db import db
 # endregion
@@ -44,16 +45,26 @@ def get_open_tasks():
     upload_task_number = config.get("upload_task_number")
     system_tasks_inprogress_collection = db["System_tasks_Inprogress"]
     
+    
+    logger.info(f"Cleaning up completed/failed tasks from System_tasks_Inprogress...")
+
+    try:
+        # Delete completed or failed tasks
+        cleanup_result = system_tasks_inprogress_collection.delete_many({
+            "task_status": {"$in": ["Completed", "Failed"]}
+        })
+        logger.info(f"Deleted {cleanup_result.deleted_count} completed/failed tasks from System_tasks_Inprogress.")
+    except Exception as e:
+        logger.exception("Failed to clean up System_tasks_Inprogress.")
+  
     logger.info(f"Fetching open tasks with Template task ID {upload_task_number} && task_status = 'Open'...")
 
-    valid_tasks = []
-        # Fetch open tasks with Template_Task_id 1
+
     try:
-       
-        collected_tasks = list(system_tasks_inprogress_collection.find({"Template_Task_Id": {"$in":upload_task_number}, "task_status": "Open"}))
-        logger.info(f"Found {len(collected_tasks)} open tasks.")
-        
-        
+        collected_tasks = system_tasks_inprogress_collection.find(
+            {"Template_Task_Id": {"$in":upload_task_number}, "task_status": "Open"}
+            )
+        logger.info(f"Start processing collected tasks...")
         
         for task in collected_tasks:
             task_id = task["Task_Id"]
@@ -63,13 +74,12 @@ def get_open_tasks():
                 file_upload_seq = task.get("parameters", {}).get("file_upload_seq")
                 if not file_upload_seq:
                     raise TaskProcessingError(task_id, "Missing file_upload_seq in task parameters.", logger)
-
                 # Log raw value and convert to integer
                 logger.info(f"Raw file_upload_seq from system_task: {file_upload_seq}")
+                
                 try:
-                    original_upload_seq = file_upload_seq  # For logging/debugging
                     file_upload_seq = int(file_upload_seq)
-                    logger.info(f"Converted file_upload_seq '{original_upload_seq}' to integer: {file_upload_seq}")
+                    logger.info(f"Converted file_upload_seq '{file_upload_seq}' to integer: {file_upload_seq}")
                 except ValueError:
                     raise TaskProcessingError(task_id, f"Invalid file_upload_seq format: {file_upload_seq}. Must be an integer.", logger)
 
@@ -78,13 +88,17 @@ def get_open_tasks():
                 
                 file_upload_log_collection = db["file_upload_log"]
                 
-                file_uploadlog_entry = file_upload_log_collection.find_one({"file_upload_seq": file_upload_seq, "log_status": "Open"})
+                file_uploadlog_entry = file_upload_log_collection.find_one(
+                    {"file_upload_seq": file_upload_seq,
+                     "log_status": "Open"
+                     }
+                    )
                 if not file_uploadlog_entry:
                     raise TaskProcessingError(task_id, f"No matching log found for file_upload_seq {file_upload_seq}.", logger)
 
                 logger.info(f"Found matching log entry: {file_uploadlog_entry}")
                 
-                valid_tasks.append(task)
+                process_and_validate_file(task)
 
             except TaskProcessingError as e:
                 logger.info(f"Task {task_id} skipped due to processing error: {e}")
@@ -92,8 +106,6 @@ def get_open_tasks():
             except Exception as e:
                 logger.exception(f"Unexpected error processing task {task_id}: {e}")
                 
-        return valid_tasks
-        
     except Exception as e:
             logger.exception("Error fetching open tasks.")
             return []  # Return an empty list if there's an error fetching tasks
