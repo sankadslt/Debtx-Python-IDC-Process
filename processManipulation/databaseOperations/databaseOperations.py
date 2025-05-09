@@ -8,16 +8,23 @@
     Version: Python 3.12
     Dependencies:
     Related Files: file_operations.py, ConnectDB.py, loggers.py, custom_exception.py etc.
-    Notes:
-    IP:The function fetches system tasks with Template_Task_id =1 and task_staus="Open" from the database
-      
+    
+    Program Description:
+    1. The function fetches system tasks from the system_task_inprogress collection where:
 
+          Template_Task_id = 1
 
-    OP:once the general validations passed,
-       the function will try to find the corresponding log entry from the file_upload_log collection using File_upload_seq.
+          task_status = "Open"
 
-       if the both "Open" system_task and log entry found then the function will send list of task to File_operations.py
-       call the relevent functions based on the File_type.
+    2.Once general validations are passed, 
+        the function attempts to find the corresponding log entry from the file_upload_log collection using the file_upload_seq.
+
+    3.If both the "Open" system task and the corresponding log entry are found:
+
+    4.The function sends the list of tasks to File_operations.py.
+       
+    Mongo collection: System_tasks_Inprogress
+                      file_upload_log   
 
 '''
 # endregion
