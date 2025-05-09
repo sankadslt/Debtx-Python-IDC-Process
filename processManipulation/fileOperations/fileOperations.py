@@ -9,7 +9,7 @@
     Dependencies:
     Related Files: db_operations.py, ConnectDB.py, loggers.py, custom_exception.py etc.
     Notes:
-    IP:The process and validate file function is contain the Open tasks and it will get the relevant file upload log
+    The process and validate file function is contain the Open tasks and it will get the relevant file upload log
        entry and in that log entry get the file type and direct to the relevant function to process and validate the file.
 
        FILE Type                 Function
@@ -21,8 +21,10 @@
        Discard -----------------> read_discard
 
 
-    OP:
+    
         if the file type is not in the file_processing_functions the function will raise an error.
+        
+    IP: tasks     
 
 
 '''
