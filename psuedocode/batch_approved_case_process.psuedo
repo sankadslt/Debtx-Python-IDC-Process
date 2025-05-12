@@ -1,69 +1,70 @@
-BEGIN -FUNCTION Batch_Approved_Case_Distribution_To_DRC()
-    INITIALIZE db as None
-    INITIALIZE total_error_count as 0
+BEGIN
+Function Batch_Approved_Case_Distribution_To_DRC:
+    Initialize total_error_count = 0
 
-    TRY:
-        TRY:
-            db = get_db_connection()
-        CATCH Exception AS db_error:
-            RAISE DatabaseError("Database connection failed")
+    Try:
+        Get template_task_id from config
 
-        FETCH system_tasks FROM db.System_tasks WHERE Template_Task_Id = 29 AND task_status = "Open"
-        CONVERT system_tasks TO task_list
+        Query system_tasks where Template_Task_Id == template_task_id AND task_status == "Open"
+        Convert system_tasks to task_list
 
-        FOR EACH task IN task_list:
-            TRY:
-                GET batch_id FROM task.parameters.case_distribution_batch_id
-                IF batch_id IS NULL:
-                    RAISE ValidationError("Missing case_distribution_batch_id in task parameters")
+        For each task in task_list:
+            Try:
+                Get batch_id from task parameters
+                If batch_id is missing:
+                    Raise ValidationError
 
-                UPDATE db.System_tasks SET task_status = "InProgress" WHERE _id = task._id
+                Update task status to "InProgress"
 
-                FETCH approver FROM db.Temp_forwarded_approver WHERE approver_reference = batch_id
-                IF approver IS NULL:
-                    RAISE NotFoundError("Approver not found for batch_id: batch_id")
+                Query approver where approver_reference == batch_id
+                If approver not found:
+                    Raise NotFoundError
 
-                IF approver.approver_type != "DRC_Distribution":
-                    CONTINUE TO NEXT TASK
+                If approver_type != "DRC_Distribution":
+                    Continue to next task
 
-                FETCH case_distribution_drc_details FROM db.Temp_case_distribution_drc_details WHERE case_distribution_batch_id = batch_id
-                IF case_distribution_drc_details IS EMPTY:
-                    RAISE DataFetchError("No case distribution details found for batch_id: batch_id")
+                Query case_distribution_drc_details where case_distribution_batch_id == batch_id
+                If no case_distribution_drc_details:
+                    Raise DataFetchError
 
-                INITIALIZE batch_error_count AS 0
+                Initialize batch_error_count = 0
 
-                FOR EACH case_drc_details IN case_distribution_drc_details:
-                    TRY:
-                        GET case_id FROM case_drc_details
-                        IF case_drc_details.proceed_on IS NOT NULL:
-                            CONTINUE TO NEXT CASE
+                For each case_drc_details in case_distribution_drc_details:
+                    Try:
+                        Get case_id
+                        If proceed_on is not None:
+                            Continue to next case
 
-                        IF case_id IS NULL:
-                            RAISE CaseIdNotFoundError("Missing case_id in case distribution details")
+                        If case_id is missing:
+                            Raise CaseIdNotFoundError
 
-                        CALL API (Case_Distribution_To_DRC/case_id)
-                        PARSE API RESPONSE
+                        Construct API URL using case_id
 
-                    CATCH API RequestException AS api_error:
-                        INCREMENT batch_error_count
-                        RAISE ProcessingError("API call failed for case_id: case_id")
+                        Send POST request to API
+                        Raise error if response is bad
+                        Parse API response
 
-                UPDATE db.System_tasks SET task_status = "Complete", task_description = "Task completed with batch_error_count errors" WHERE _id = task._id
-                INCREMENT total_error_count BY batch_error_count
+                    Except requests error:
+                        Increment batch_error_count
+                        Continue to next case
 
-            CATCH CustomException AS task_error:
-                CONTINUE TO NEXT TASK
-            CATCH Exception AS task_error:
-                SET task_status = "Failed"
-                CONTINUE TO NEXT TASK
+                Update task status to "Complete"
+                Update task description with batch_error_count
+                Increment total_error_count by batch_error_count
 
-        IF total_error_count > 0:
-            HANDLE TOTAL ERROR REPORTING
+            Except CustomException:
+                (Handle custom exception for this task)
 
-    CATCH CustomException AS e:
-        HANDLE CUSTOM EXCEPTION
-    CATCH Exception AS e:
-        HANDLE UNEXPECTED EXCEPTION
-    FINALLY:
-        IF db IS NOT NULL:
-            CLOSE DATABASE CONNECTION
+            Except Exception:
+                Update task status to "Failed"
+                (Handle unexpected error)
+
+        If total_error_count > 0:
+            (Optional: handle overall error reporting)
+
+    Except CustomException:
+        (Handle top-level custom exception)
+
+    Except Exception:
+        (Handle unexpected top-level error)
+END
