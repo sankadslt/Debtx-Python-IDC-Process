@@ -98,7 +98,7 @@ def process_and_validate_file(task):
             case "Hold":
                 read_case_hold(file_upload_log_entry, task_id, file_upload_seq, file_type,file_path)
             case "Discard":
-                 read_case_discard(file_upload_log_entry, task_id,file_path,file_upload_seq, file_type)
+                 read_case_discard(file_upload_log_entry, task_id, file_upload_seq, file_type,file_path)
             case _:
                 raise TaskProcessingError(
                     task_id=task_id,
