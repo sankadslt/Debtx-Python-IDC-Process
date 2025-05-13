@@ -58,7 +58,7 @@ def read_incident_creation(file_upload_log_entry, task_id,file_upload_seq,file_t
     logger = get_logger("incident_creation")
     
     file_upload_log_collection = db["file_upload_log"]
-    system_tasks_collection = db["System_tasks_inprogress"]
+    system_tasks_collection = db["System_tasks"]
     system_tasks_inprogress_collection= db["System_tasks_Inprogress"]
     
     # Update task statuses on System task,System Tasks inprogress & file_upload_log documents to "inProgress"

@@ -1,4 +1,4 @@
-# region-Template
+  # region-Template
 '''
     Purpose: This template is used for validating the period extension CSV.
     Created Date: 2025-03-05
@@ -62,7 +62,7 @@ logger = get_logger("Read Validity Period Extend")
 def read_validity_period_extend(file_upload_log_entry, task_id, file_upload_seq, file_type,file_path):
     
     file_upload_log_collection = db["file_upload_log"]
-    system_tasks_collection = db["System_tasks_inprogress"]
+    system_tasks_collection = db["System_tasks"]
     system_tasks_inprogress_collection= db["System_tasks_Inprogress"]
     
     # Update task statuses on System task,System Tasks inprogress & file_upload_log documents to "inProgress"

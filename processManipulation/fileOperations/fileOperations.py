@@ -93,12 +93,12 @@ def process_and_validate_file(task):
                  read_incident_creation(file_upload_log_entry, task_id, file_upload_seq, file_type,file_path)
             case "Incident Reject":
                  read_incident_reject(file_upload_log_entry, task_id, file_upload_seq, file_type,file_path)
-            case "Validity Period Extension":
+            case "Validity Period Extend":
                  read_validity_period_extend(file_upload_log_entry, task_id, file_upload_seq, file_type,file_path)
             case "Hold":
                 read_case_hold(file_upload_log_entry, task_id, file_upload_seq, file_type,file_path)
             case "Discard":
-                 read_case_discard(file_upload_log_entry, task_id,file_path)
+                 read_case_discard(file_upload_log_entry, task_id,file_path,file_upload_seq, file_type)
             case _:
                 raise TaskProcessingError(
                     task_id=task_id,

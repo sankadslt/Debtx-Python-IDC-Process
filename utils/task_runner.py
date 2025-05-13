@@ -12,6 +12,9 @@ logger = get_logger("main")
 def main():
     try:
         tasks = get_open_tasks()
+        if not tasks:
+            logger.warning("No open tasks to process or failed to fetch tasks.")
+            return
         logger.info(f"Number of open tasks fetched: {len(tasks)}")
     except Exception as e:
         logger.exception("Failed to fetch open tasks.")
