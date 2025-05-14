@@ -1,0 +1,91 @@
+BEGIN
+FUNCTION read_case_discard(file_upload_log_entry, task_id, file_upload_seq, file_type, file_path):
+    
+    SET file_upload_log_collection TO db["file_upload_log"]
+    SET system_tasks_collection TO db["System_tasks"]
+    SET system_tasks_inprogress_collection TO db["System_tasks_Inprogress"]
+    SET case_details TO db["Case_details"]
+
+    CALL update_status_to_inprogress(task_id, file_upload_seq, db)
+
+    LOOP:
+        GENERATE unique new_file_name using file_type and timestamp
+        SET new_file_path using case_discard_path and new_file_name
+        IF new_file_path does not exist:
+            BREAK loop
+        WAIT for 1 second
+
+    CREATE case_discard_path directory if it doesn't exist
+
+    GET original_file_name FROM file_upload_log_entry
+    SET source_file_path TO file_path + original_file_name
+
+    IF source_file_path does not exist:
+        RAISE TaskProcessingError (file not found)
+
+    TRY:
+        MOVE file from source_file_path TO new_file_path
+
+        UPDATE file_upload_log_collection SET Forwarded_File_Path TO new_file_path
+
+        SET total_record_count, total_error_count TO 0
+
+        GENERATE error_file_name using file_type and timestamp
+        SET error_file_path TO case_discard_path + error_file_name
+
+        OPEN new_file_path AS record_file
+        OPEN error_file_path AS err_file
+
+        FOR each row in record_file:
+            IF row is empty:
+                CONTINUE
+
+            INCREMENT total_record_count
+
+            TRY:
+                IF row has fewer than 4 values:
+                    RAISE ValidationError (missing values)
+
+                EXTRACT case_id, account_number, telephone_number, discard_reason from row
+
+                MATCH case_id, account_number, telephone_number, discard_reason:
+                    CASE discard_reason is empty:
+                        RAISE ValidationError (discard reason missing)
+                    CASE case_id is not digit:
+                        RAISE ValidationError (invalid case ID)
+                    CASE account_number is not 10-digit number:
+                        RAISE ValidationError (invalid account number)
+                    CASE telephone_number length is not between 9 and 12 or not digits:
+                        RAISE ValidationError (invalid telephone number)
+
+                CALL build_case_query with row details
+                FIND case_document using the query in case_details
+
+                IF case_document not found:
+                    RAISE ValidationError (no matching case)
+
+                UPDATE case_details SET case status TO "Discard" with reason
+
+            EXCEPT ValidationError as e:
+                WRITE row and error message to err_file
+                INCREMENT total_error_count
+                CONTINUE
+
+    EXCEPT Exception as e:
+        RAISE TaskProcessingError (error reading file)
+
+    UPDATE file_upload_log_collection:
+        SET log_status TO "Completed"
+        SET log_status_description
+        SET total_record_count and total_error_count
+
+    UPDATE system_tasks_collection:
+        SET task_status TO "Completed"
+        SET task_status_description
+        SET total_record_count and total_error_count
+
+    UPDATE system_tasks_inprogress_collection:
+        SET task_status TO "Completed"
+        SET task_status_description
+        SET total_record_count and total_error_count
+END

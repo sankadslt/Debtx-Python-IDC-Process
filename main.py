@@ -9,17 +9,20 @@
     Dependencies:
     Related Files: file_operations.py, db_operations.py, loggers.py, custom_exception.py etc.
     Notes:  This file is used for running the entire program script
-    IP:
-    OP:
+    
+    IP:'Open' tasks & log entries from database
+    OP:Database Updates / Error Docs
 '''
 # endregion
 
 from utils.logger.loggers import get_logger
-from utils.task_runner import main
+from processManipulation.task_runner import task_runner
 
 
 logger = get_logger("main")
 
+def main():
+    task_runner()
 
 
 

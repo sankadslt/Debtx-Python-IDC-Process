@@ -1,0 +1,46 @@
+BEGIN
+
+FUNCTION get_open_tasks():
+    SET upload_task_number FROM config
+    SET system_tasks_inprogress_collection TO db["System_tasks_Inprogress"]
+
+    TRY:
+        DELETE documents in system_tasks_inprogress_collection WHERE task_status is "Completed" or "Failed"
+    EXCEPT:
+        HANDLE cleanup failure
+
+    TRY:
+        FIND tasks WHERE Template_Task_Id is in upload_task_number AND task_status is "Open"
+        FOR each task in collected tasks:
+            EXTRACT task_id FROM task
+
+            TRY:
+                GET file_upload_seq FROM task parameters
+                IF file_upload_seq is missing:
+                    RAISE TaskProcessingError
+
+                TRY:
+                    CONVERT file_upload_seq TO integer
+                EXCEPT:
+                    RAISE TaskProcessingError for invalid format
+
+                SET file_upload_log_collection TO db["file_upload_log"]
+                FIND one entry in file_upload_log_collection WHERE
+                    file_upload_seq matches AND log_status is "Open"
+
+                IF no matching entry found:
+                    RAISE TaskProcessingError
+
+                CALL process_and_validate_file(task)
+
+            EXCEPT TaskProcessingError:
+                SKIP task due to validation error
+
+            EXCEPT Exception:
+                HANDLE unexpected error for task
+
+    EXCEPT:
+        HANDLE failure in fetching open tasks
+        RETURN empty list
+
+END        

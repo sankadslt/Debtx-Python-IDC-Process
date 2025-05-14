@@ -1,0 +1,109 @@
+FUNCTION read_validity_period_extend(file_upload_log_entry, task_id, file_upload_seq, file_type, file_path):
+
+    Initialize database collections:
+        - file_upload_log
+        - system_tasks
+        - system_tasks_inprogress
+
+    Update status of:
+        - system_tasks
+        - system_tasks_inprogress
+        - file_upload_log
+    TO "inProgress"
+
+    LOOP:
+        Generate unique filename with timestamp
+        BREAK if generated path does not already exist
+        ELSE wait for 1 second
+
+    Create folder for validity_period_extend path if not exists
+
+    Get original file name from log entry
+    Construct full path of source file
+
+    IF source file does not exist:
+        RAISE TaskProcessingError
+
+    TRY:
+        IF source file path exists:
+            TRY:
+                Move the file to the new path
+                Update Forwarded_File_Path in file_upload_log
+            EXCEPT:
+                RAISE TaskProcessingError
+        ELSE:
+            RETURN
+
+        Create error file for logging invalid rows
+
+        OPEN new_file_path as record_file
+        OPEN error_file_path as error_file
+
+        FOR EACH row IN record_file:
+            SKIP if row is empty
+
+            Extract:
+                - case_id
+                - account_no
+                - telephone_no
+                - no_of_months
+
+            IF all three identifiers are missing:
+                Append error message to row
+                Write to error_file
+                RAISE MissingIdentifiersException
+
+            IF no_of_months is missing:
+                Append error message to row
+                Write to error_file
+                RAISE MissingNoOfMonthsException
+
+            Build MongoDB query based on available identifiers
+
+            Query Case_details collection for matching document
+
+            IF no matching case found:
+                Append error message to row
+                Write to error_file
+                RAISE CaseNotFoundException
+
+            Extract case_status from document
+
+            Call get_case_phase API with case_status
+
+            IF API fails OR returns no case_phase:
+                Append error message to row
+                Write to error_file
+                RAISE CasePhaseException OR InvalidCaseStatusException
+
+            IF case_phase is not "Negotiation" or "Mediation Board":
+                Append error message to row
+                Write to error_file
+                RAISE InvalidCaseStatusException
+
+            IF monitor_months + no_of_months > 5:
+                Append error message to row
+                Write to error_file
+                RAISE PeriodExtensionException
+
+            Calculate new monitor_months and new expire_dtm
+
+            Update:
+                - monitor_months
+                - dtm.0.expire_dtm
+                - case_status_description
+
+        END FOR
+
+        Update file_upload_log:
+            - log_status: Completed
+            - log_status_description: Validity period extension completed
+
+        Update system_tasks and system_tasks_inprogress:
+            - task_status: Completed
+            - task_status_description: Validity period extension completed
+
+    EXCEPT Exception AS e:
+        RAISE TaskProcessingError
+
+END FUNCTION

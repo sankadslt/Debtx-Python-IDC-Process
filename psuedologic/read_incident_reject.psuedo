@@ -1,0 +1,95 @@
+BEGIN
+FUNCTION read_incident_reject(file_upload_log_entry, task_id, file_upload_seq, file_type, file_path):
+
+    SET collections: file_upload_log_collection, system_tasks_collection, 
+                     system_tasks_inprogress_collection, incident_collection
+
+    CALL update_status_to_inprogress(task_id, file_upload_seq)
+
+    REPEAT:
+        CREATE new_file_name using file_type and current timestamp
+        CREATE new_file_path using configured incident_reject_path and new_file_name
+
+        IF new_file_path does not exist:
+            BREAK loop
+        WAIT for 1 second
+
+    ENSURE incident_reject_path exists
+
+    GET original_file_name from file_upload_log_entry
+    SET source_file_path = file_path + original_file_name
+
+    IF source_file_path does not exist:
+        RAISE TaskProcessingError with file not found message
+
+    TRY:
+        MOVE source_file_path to new_file_path
+
+        UPDATE file_upload_log_collection with Forwarded_File_Path = new_file_path
+
+        INITIALIZE total_record_count = 0, error_record_count = 0
+
+        CREATE error_file_path with timestamp and ".err.csv" extension under incident_reject_path
+
+        OPEN new_file_path as record_file
+        OPEN error_file_path as err_file for writing
+
+        FOR EACH row IN record_file:
+            IF row is empty:
+                CONTINUE
+
+            INCREMENT total_record_count
+
+            TRY:
+                MATCH row pattern:
+                    CASE [account_num, rejected_reason] where both values exist:
+                        STRIP values
+                        IF account_num length is not 10:
+                            RAISE ValidationError for Account_Num
+
+                        FIND incident document using account_num
+
+                        MATCH document:
+                            CASE None:
+                                RAISE ValidationError: No incident document found
+                            CASE document.Proceed_dtm is None:
+                                UPDATE document:
+                                    Incident_Status = "Incident Reject"
+                                    Incident_Status_Dtm = current timestamp
+                                    Status_Description = rejected_reason
+                            CASE default:
+                                RAISE ValidationError: Case is created. Cannot reject
+
+                    CASE row with any missing values:
+                        RAISE ValidationError: Missing required values in row
+
+                    CASE default:
+                        RAISE ValidationError: Unexpected format in row
+
+            EXCEPT ValidationError AS e:
+                APPEND error message to row
+                WRITE row to err_file
+                INCREMENT error_record_count
+                CONTINUE
+
+        UPDATE file_upload_log_collection:
+            log_status = "Completed"
+            log_status_description = "Incident reject process completed"
+            total_record_count
+            error_record_count
+
+        UPDATE system_tasks_collection:
+            task_status = "Completed"
+            task_status_description = "Incident reject process completed"
+            total_record_count
+            error_record_count
+
+        UPDATE system_tasks_inprogress_collection:
+            task_status = "Completed"
+            task_status_description = "Incident reject process completed"
+            total_record_count
+            error_record_count
+
+    EXCEPT Exception AS e:
+        RAISE TaskProcessingError with error message
+END

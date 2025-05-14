@@ -1,0 +1,98 @@
+BEGIN 
+FUNCTION read_case_hold(file_upload_log_entry, task_id, file_upload_seq, file_type, file_path):
+    INIT file_upload_log_collection, system_tasks_collection, system_tasks_inprogress_collection, case_details
+
+    CALL update_status_to_inprogress(task_id, file_upload_seq)
+
+    // Generate a unique destination file name that doesn't exist yet
+    LOOP:
+        new_file_name ← file_type + timestamp + ".csv"
+        new_file_path ← join(case_hold_path, new_file_name)
+        IF new_file_path does NOT exist:
+            BREAK LOOP
+        WAIT for 1 second
+
+    ENSURE case_hold_path directory exists
+
+    original_file_name ← file_upload_log_entry["File_Name"]
+    source_file_path ← join(file_path, original_file_name)
+
+    IF source_file_path does NOT exist:
+        RAISE TaskProcessingError(task_id, "File not found: " + source_file_path)
+
+    TRY:
+        MOVE source_file_path TO new_file_path
+        UPDATE file_upload_log_collection:
+            SET Forwarded_File_Path = new_file_path
+
+        total_record_count ← 0
+        total_error_count ← 0
+
+        error_file_name ← file_type + timestamp + ".err.csv"
+        error_file_path ← join(case_hold_path, error_file_name)
+
+        OPEN new_file_path AS record_file
+        OPEN error_file_path AS err_file
+
+        FOR EACH row IN record_file:
+            IF row is empty:
+                CONTINUE
+
+            total_record_count += 1
+
+            TRY:
+                IF length(row) < 4:
+                    RAISE ValidationError(row_num, "Row Format", "Missing values in row")
+
+                case_id, account_number, telephone_number, hold_reason ← first 4 values of row (stripped)
+
+                IF hold_reason IS empty:
+                    RAISE ValidationError(row_num, "Hold Reason", "Hold reason is missing")
+
+                IF case_id IS NOT digits:
+                    RAISE ValidationError(row_num, "Case ID", "Invalid case ID")
+
+                IF account_number IS NOT 10-digit number:
+                    RAISE ValidationError(row_num, "Account Number", "Invalid account number")
+
+                IF telephone_number IS NOT 9-12 digit number:
+                    RAISE ValidationError(row_num, "Telephone Number", "Invalid telephone number")
+
+                query ← build_case_query(case_id, account_number, telephone_number)
+                case_document ← case_details.find_one(query)
+
+                IF case_document IS NULL:
+                    RAISE ValidationError(row_num, "Case Lookup", "No matching case found")
+
+                UPDATE case_details:
+                    SET case_current_status = "Abundant"
+                        case_status[0].case_status = "Abundant"
+                        case_status[0].status_reason = hold_reason
+
+            EXCEPT ValidationError AS e:
+                WRITE row + error_message TO err_file
+                total_error_count += 1
+                CONTINUE
+
+    EXCEPT Exception AS e:
+        RAISE TaskProcessingError(task_id, "Error reading file")
+
+    // Final task updates
+    UPDATE file_upload_log_collection:
+        SET log_status = "Completed",
+            log_status_description = "Case hold process completed",
+            total_record_count,
+            total_error_count
+
+    UPDATE system_tasks_collection:
+        SET task_status = "Completed",
+            task_status_description = "Case hold process completed",
+            total_record_count,
+            total_error_count
+
+    UPDATE system_tasks_inprogress_collection:
+        SET task_status = "Completed",
+            task_status_description = "Case hold process completed",
+            total_record_count,
+            total_error_count
+END

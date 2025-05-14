@@ -1,15 +1,13 @@
-from utils.customExceptions.customExceptions import TaskProcessingError
-from utils.coreConfig import config
 from utils.logger.loggers import get_logger
 from processManipulation.fileOperations.fileOperations import process_and_validate_file
 from processManipulation.databaseOperations.databaseOperations import get_open_tasks
+from utils.customExceptions.customExceptions import TaskProcessingError
+from utils.coreConfig import config
+
+logger = get_logger("task_runner")
 
 
-
-logger = get_logger("main")
-
-
-def main():
+def task_runner():
     try:
         tasks = get_open_tasks()
         if not tasks:

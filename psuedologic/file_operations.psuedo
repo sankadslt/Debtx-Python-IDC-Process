@@ -1,0 +1,41 @@
+BEGIN
+FUNCTION process_and_validate_file(task):
+    EXTRACT task_id FROM task
+
+    TRY:
+        CONVERT file_upload_seq FROM task["parameters"]["file_upload_seq"] TO integer
+
+        SET file_upload_log_collection TO db["file_upload_log"]
+        FIND file_upload_log_entry WHERE file_upload_seq matches
+
+        IF file_upload_log_entry is not found:
+            RAISE TaskProcessingError (no matching log)
+
+        GET file_type FROM file_upload_log_entry
+        IF file_type is missing:
+            RAISE TaskProcessingError (file_type missing)
+
+        GET file_path FROM config (default to "default_path")
+        IF file_path is missing:
+            RAISE TaskProcessingError (file path missing)
+
+        MATCH file_type:
+            CASE "Incident Creation":
+                CALL read_incident_creation(...)
+            CASE "Incident Reject":
+                CALL read_incident_reject(...)
+            CASE "Validity Period Extend":
+                CALL read_validity_period_extend(...)
+            CASE "Hold":
+                CALL read_case_hold(...)
+            CASE "Discard":
+                CALL read_case_discard(...)
+            DEFAULT:
+                RAISE TaskProcessingError (unsupported file_type)
+
+    EXCEPT TaskProcessingError:
+        HANDLE task-specific processing error
+
+    EXCEPT Exception:
+        HANDLE unexpected processing error
+END
