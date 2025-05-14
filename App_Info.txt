@@ -48,7 +48,7 @@ General Purpose - This program is used for READ  uploaded files extract and Upda
 *Common Mongo Collection update across all the function in processManipulation/fileManipulation
          function name: update_status_to_inprogress(task_id, file_upload_seq, db, logger)
 
-(utils/task_runner.py)
+(processManipulation/task_runner.py)
 include the code to run entire script
 
 purpose-cleaned main.py
