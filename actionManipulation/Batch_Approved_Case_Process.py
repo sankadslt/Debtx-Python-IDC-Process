@@ -66,8 +66,8 @@ def Batch_Approved_Case_Distribution_To_DRC():
                 if not batch_id:
                     raise ValidationError("Missing case_distribution_batch_id in task parameters")
 
-                logger.info(f"Processing task {task['_id']} with batch_id {batch_id}")
-                db.System_tasks.update_one({"_id": task["_id"]}, {"$set": {"task_status": "InProgress"}})
+                logger.info(f"Processing task {task['Task_Id']} with batch_id {batch_id}")
+                db.System_tasks.update_one({"Task_Id": task["Task_Id"]}, {"$set": {"task_status": "InProgress"}})
                 
                 #fetching the corresponding approver from Template_forwarded_approver collection
                 approver = db.tmp_forwarded_approver.find_one({"approver_reference": batch_id})
@@ -76,7 +76,7 @@ def Batch_Approved_Case_Distribution_To_DRC():
                 
                 #check if the approver type is DRC_Distribution
                 if approver.get("approver_type") != "DRC_Distribution":
-                    logger.error(f"Skipping task {task['_id']}, approver type is {approver.get('approver_type')}")
+                    logger.error(f"Skipping task {task['Task_Id']}, approver type is {approver.get('approver_type')}")
                     continue
 
                 logger.info(f"Approver type DRC_Distribution found for batch_id {batch_id}")
@@ -119,27 +119,35 @@ def Batch_Approved_Case_Distribution_To_DRC():
                         logger.info(f"API response for case_id {case_id}: {json.dumps(response_data)}")
 
                     except requests.RequestException as api_error:
-                        logger.error(f"API call failed for case_id {case_id}: {str(api_error)}")
+                        error_response=None
+                        if api_error.response is not None:
+                            try:
+                                error_response = api_error.response.json()
+                            except ValueError:
+                                error_response = api_error.response.text
+                        else:
+                            error_response = "No response body (response is None)"
+                        logger.error(f"API call failed for case_id {case_id}:| Response: {error_response}")
                         batch_error_count += 1  # Continue processing even if API fails
                         continue
                 
                 #set task status to complete and update task description with error count
-                db.System_tasks.update_one({"_id": task["_id"]}, {"$set": {
+                db.System_tasks.update_one({"Task_Id": task["Task_Id"]}, {"$set": {
                     "task_status": "Complete",
                     "task_description": f"Task completed with {batch_error_count} errors"
                 }})
                 total_error_count += batch_error_count
 
-                logger.info(f"Task {task['_id']} completed with {batch_error_count} errors.")
+                logger.info(f"Task {task['Task_Id']} completed with {batch_error_count} errors.")
                 
                 logger.info(f"Batch process completed. Total tasks processed: {len(task_list)}, total errors: {total_error_count}")
 
 
             except CustomException as task_error:
-                logger.error(f"Custom exception processing task {task['_id']}: {str(task_error)}")
+                logger.error(f"Custom exception processing task {task['Task_Id']}: {str(task_error)}")
             except Exception as task_error:
-                db.System_tasks.update_one({"_id":task["_id"]},{"$set":{"task_status":"Failed"}})
-                logger.error(f"Unexpected error processing task {task['_id']}: {str(task_error)}\n{traceback.format_exc()}")
+                db.System_tasks.update_one({"Task_Id":task["Task_Id"]},{"$set":{"task_status":"Failed"}})
+                logger.error(f"Unexpected error processing task {task['Task_Id']}: {str(task_error)}\n{traceback.format_exc()}")
 
         if total_error_count > 0:
             logger.error(f"Total errors encountered across all tasks: {total_error_count}")
